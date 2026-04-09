@@ -8,7 +8,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/owe-service
-  DEVOPS_REPOSITORY: example/owe-devops
+  DEVOPS_REPOSITORY: forgoes/owe-devops
   DEVOPS_VALUES_FILE: charts/owe-staging/values.yaml
   DEVOPS_REPO_TOKEN: ${{ secrets.DEVOPS_REPO_TOKEN }}
 
