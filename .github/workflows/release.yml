@@ -78,7 +78,7 @@ jobs:
           values = Path("devops") / os.environ["DEVOPS_VALUES_FILE"]
           text = values.read_text()
           updated, replacements = re.subn(
-              r'(repository: ghcr\\.io/[^\\n]+/owe-service\\n\\s+tag: )[^\\n]+',
+              r'(repository: ghcr\.io/[^\n]+/owe-service\n\s+tag: )[^\n]+',
               rf'\g<1>{os.environ["VERSION_TAG"]}',
               text,
               count=1,
