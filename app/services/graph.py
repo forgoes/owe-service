@@ -76,7 +76,7 @@ def make_initial_state(session_id: str) -> ConversationState:
             reasoning="No lead has been qualified yet.",
         ),
         missing_fields=[],
-        next_question="Start by telling me what you need help with.",
+        next_question="Please share your business type, contract situation, energy usage, or building size to get started.",
         completed=False,
         last_intent=None,
     )
@@ -89,6 +89,14 @@ def route_llm_node(state: GraphState) -> dict[str, Any]:
 
     mode = previous_state.mode if previous_state else ConversationMode.GENERAL
     existing_language = previous_state.detected_language if previous_state else None
+    if previous_state is not None:
+        slot_fill_result = _route_by_slot_fill(
+            request=request,
+            previous_state=previous_state,
+            language=existing_language or DEFAULT_LANGUAGE,
+        )
+        if slot_fill_result is not None:
+            return slot_fill_result
     try:
         result = intent_classifier.classify(
             request.message,
@@ -140,9 +148,10 @@ def general_chat_node(state: GraphState) -> dict[str, Any]:
     return {
         "current_state": updated_state,
         "draft_message": (
-            "Answer the user's question directly and naturally. "
-            "If it is relevant, you may briefly mention that this system can also qualify energy sales leads, "
-            "but do not force the conversation back to that workflow."
+            "Reply as a focused business energy information intake assistant. "
+            "For greetings or vague openers, briefly explain that you help collect the business details needed for an energy consultation and follow-up. "
+            "Invite the user to share business type, contract status, usage, provider status, or building size. "
+            "Do not present yourself as a general-purpose chat assistant or as a lead-scoring tool."
         ),
         "reply_mode": ReplyMode.GENERAL,
     }
@@ -158,13 +167,13 @@ def product_question_node(state: GraphState) -> dict[str, Any]:
         last_intent=IntentType.PRODUCT_QUESTION,
     )
     draft_message = (
-        "Introduce this product as an energy lead qualification assistant. "
-        "Explain that it helps assess commercial and industrial energy opportunities by collecting details like usage, contract timing, provider status, and facility information. "
+        "Introduce this product as a business energy intake assistant for commercial and industrial customers. "
+        "Explain that it helps collect the details our team needs, such as business type, usage, contract timing, provider status, and facility information. "
         "If the user is asking how to use it or what to ask, give a few concrete example prompts such as "
-        "'This is a commercial site using 120 MWh with a contract expiring in 4 months', "
-        "'We do not have a current provider', or "
-        "'Can you help qualify this industrial facility lead?'. "
-        "Mention that it can still start with a simple question and guide the user through the process."
+        "'We run a hotel using about 120 MWh and the contract expires in 4 months', "
+        "'We do not currently have an energy supplier', or "
+        "'Our restaurant has 40,000 square feet and a fixed-term contract'. "
+        "Mention that the user can start from just one known detail and the system will guide them through the rest."
     )
     return {
         "current_state": updated_state,
@@ -181,7 +190,7 @@ def extract_profile_node(state: GraphState) -> dict[str, Any]:
         previous_state.detected_language if previous_state else DEFAULT_LANGUAGE
     )
     base_profile = previous_state.profile if previous_state else (request.profile or LeadProfile())
-    merged_profile = merge_profile(base_profile, request.message, language)
+    merged_profile = state.merged_profile or merge_profile(base_profile, request.message, language)
     response_prefix = ""
     if (
         previous_state is not None
@@ -198,6 +207,81 @@ def extract_profile_node(state: GraphState) -> dict[str, Any]:
         "merged_profile": merged_profile,
         "response_prefix": response_prefix,
     }
+
+
+def _route_by_slot_fill(
+    request: ChatRequest,
+    previous_state: ConversationState,
+    language: str,
+) -> dict[str, Any] | None:
+    if previous_state.mode != ConversationMode.QUALIFICATION:
+        return None
+    if not previous_state.missing_fields:
+        return None
+
+    try:
+        merged_profile = merge_profile(previous_state.profile, request.message, language)
+    except Exception:
+        return None
+
+    if not _fills_any_missing_field(
+        previous_state.profile,
+        merged_profile,
+        previous_state.missing_fields,
+    ):
+        return None
+
+    return {
+        "routing_status": "ready",
+        "intent": IntentType.BUSINESS_QUALIFICATION,
+        "language": language,
+        "merged_profile": merged_profile,
+    }
+
+
+def _fills_any_missing_field(
+    previous_profile: LeadProfile,
+    merged_profile: LeadProfile,
+    missing_fields: list[str],
+) -> bool:
+    for field in missing_fields:
+        if field == "business_segment" and (
+            merged_profile.business_segment is not None
+            and merged_profile.business_segment != previous_profile.business_segment
+        ):
+            return True
+
+        if field == "contract_status" and (
+            merged_profile.contract_status != previous_profile.contract_status
+            and merged_profile.contract_status.value != "unknown"
+        ):
+            return True
+
+        if field == "contract_expiry_months" and (
+            merged_profile.contract_expiry_months is not None
+            and merged_profile.contract_expiry_months != previous_profile.contract_expiry_months
+        ):
+            return True
+
+        if field == "annual_usage_or_square_footage":
+            if (
+                merged_profile.annual_usage_mwh is not None
+                and merged_profile.annual_usage_mwh != previous_profile.annual_usage_mwh
+            ):
+                return True
+            if (
+                merged_profile.square_footage is not None
+                and merged_profile.square_footage != previous_profile.square_footage
+            ):
+                return True
+
+        if field == "building_age_years" and (
+            merged_profile.building_age_years is not None
+            and merged_profile.building_age_years != previous_profile.building_age_years
+        ):
+            return True
+
+    return False
 
 
 def evaluate_qualification_node(state: GraphState) -> dict[str, Any]:

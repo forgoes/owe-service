@@ -66,6 +66,11 @@ Required environment variables:
 - `DB_NAME`
 - `DB_SCHEMA`
 
+Optional Auth0 API protection:
+
+- `AUTH0_DOMAIN`
+- `AUTH0_API_AUDIENCE`
+
 Typical workflow:
 
 ```bash

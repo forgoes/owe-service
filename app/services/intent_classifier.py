@@ -49,17 +49,17 @@ class IntentClassifier:
                 (
                     "system",
                     (
-                        "Classify the user's latest message for an energy lead qualification assistant. "
+                        "Classify the user's latest message for a business energy intake assistant. "
                         "intent must be one of: general_chat, product_question, business_qualification, "
                         "business_clarification, off_topic. "
                         "language must be a normalized lowercase language code such as en, zh, es, fr, or pt. "
                         "Use product_question when the user asks what this product/system/assistant does, "
                         "what it is for, what it can help with, how it works at a high level, "
                         "how to use it, how to ask better questions, what to ask first, or how to get started. "
-                        "Use business_qualification when the user is discussing an energy lead, "
+                        "Use business_qualification when the user is discussing a business energy account or opportunity, "
                         "contract, usage, provider, facility, commercial, industrial, square footage, "
-                        "or qualification details. "
-                        "If the user asks what one of those business terms means during qualification, "
+                        "or intake details. "
+                        "If the user asks what one of those business terms means during the intake flow, "
                         "use business_clarification. "
                         "Questions like 'How should I ask?', 'What should I tell you?', "
                         "'How do I use this?', 'How should I get started?', "

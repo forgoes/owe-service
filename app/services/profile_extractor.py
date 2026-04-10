@@ -41,7 +41,7 @@ class ProfileExtractor:
             [
                 (
                     "system",
-                    "Extract only explicitly supported lead qualification fields from the user's latest message. "
+                    "Extract only explicitly supported business energy intake fields from the user's latest message. "
                     "Return null for fields that are not clearly stated. "
                     "Map no current provider to contract_status=no_current_provider and has_current_provider=false. "
                     "Map month-to-month, fixed term, expiring, commercial, industrial, usage in MWh, "

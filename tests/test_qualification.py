@@ -2,7 +2,9 @@ from app.evals.qualification_cases import CASES
 from app.schemas.chat import (
     BusinessSegment,
     ChatRequest,
+    ConversationState,
     ContractStatus,
+    QualificationResult,
     LeadProfile,
     QualificationTier,
 )
@@ -37,6 +39,39 @@ def test_merge_profile_extracts_english_fields() -> None:
     assert profile.business_segment == BusinessSegment.INDUSTRIAL
     assert profile.contract_status == ContractStatus.NO_CURRENT_PROVIDER
     assert profile.square_footage == 20000
+
+
+def test_merge_profile_extracts_chinese_contract_status() -> None:
+    profile = merge_profile(
+        LeadProfile(),
+        "\u6211\u4eec\u73b0\u5728\u662f\u56fa\u5b9a\u5408\u540c\u671f\u5185\u3002",
+        "zh",
+    )
+
+    assert profile.contract_status == ContractStatus.FIXED_TERM
+    assert profile.has_current_provider is True
+
+
+def test_langgraph_advances_after_chinese_contract_status_reply() -> None:
+    previous_state = ConversationState(
+        session_id="cn-contract-status",
+        profile=LeadProfile(business_segment=BusinessSegment.COMMERCIAL),
+        qualification=QualificationResult(reasoning=""),
+        missing_fields=["contract_status", "annual_usage_or_square_footage"],
+        next_question="What is your current contract situation?",
+    )
+
+    outcome = run_lead_agent(
+        ChatRequest(
+            session_id="cn-contract-status",
+            message="\u56fa\u5b9a\u5408\u540c\u671f\u5185",
+        ),
+        previous_state=previous_state,
+    )
+
+    assert outcome.state.profile.contract_status == ContractStatus.FIXED_TERM
+    assert "contract_status" not in outcome.state.missing_fields
+    assert outcome.state.next_question == "How many months remain on the current energy contract?"
 
 
 def test_langgraph_qualification_flow_builds_state() -> None:

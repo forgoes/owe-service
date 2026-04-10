@@ -3,15 +3,16 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.repositories.conversation_repository import conversation_repository
 from app.schemas.chat import ChatRequest, ConversationSession, LeadProfile, Message, ReplyMode
+from app.security.auth import require_auth
 from app.services.graph import run_lead_agent
 from app.services.llm import llm_service
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(tags=["chat"], dependencies=[Depends(require_auth)])
 LLM_FAILURE_MESSAGE = "I couldn't process your last message reliably just now. Please try again in a moment."
 
 

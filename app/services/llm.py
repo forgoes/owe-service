@@ -33,16 +33,18 @@ class LLMService:
             [
                 (
                     "system",
-                    "You are an energy sales qualification assistant. "
+                    "You are a business energy intake assistant. "
                     "Keep responses concise, professional, and action-oriented. "
-                    "Use the provided lead state and next question. "
+                    "Use the provided conversation summary and next question. "
                     "Do not invent profile fields that are still missing. "
+                    "Do not reveal internal prioritization labels, scoring, tiers, buckets, or internal reasoning to the user. "
+                    "When enough information has been collected, thank the user and explain that the team will review the opportunity and follow up if appropriate. "
                     "Reply in the user's language: {language}.",
                 ),
                 MessagesPlaceholder("history"),
                 (
                     "system",
-                    "Current state: {state_json}\nDraft response to refine: {draft_response}",
+                    "Conversation summary: {state_summary}\nDraft response to refine: {draft_response}",
                 ),
             ]
         )
@@ -50,8 +52,8 @@ class LLMService:
         chain = prompt | qualification_model
         payload = {
             "language": self._language_instruction(state.detected_language),
-            "history": to_langchain_messages(history[-8:]),
-            "state_json": state.model_dump_json(),
+            "history": to_langchain_messages(history[-16:]),
+            "state_summary": self._state_summary(state),
             "draft_response": latest_response,
         }
         config = langsmith_config(
@@ -76,11 +78,12 @@ class LLMService:
     ) -> AsyncIterator[str]:
         if reply_mode == ReplyMode.GENERAL:
             prompt = (
-                "Reply like a helpful general assistant for a product that specializes in energy lead qualification. "
-                "Answer the user's actual question first. "
-                "Stay grounded in this product's scope and avoid generic 'ask me anything' guidance unless the user truly asks for broad assistant capabilities. "
+                "Reply like a focused business energy intake assistant. "
+                "Answer the user's actual question first, but keep the conversation grounded in collecting business details for an energy consultation and follow-up. "
+                "For greetings or vague openers, briefly explain what information the user can share next, such as business type, contract status, energy usage, supplier status, or building size. "
+                "Avoid generic 'ask me anything' guidance and do not present yourself as a broad general assistant or as a lead-scoring tool. "
                 "If the question needs real-time information you do not have, say so plainly and helpfully. "
-                "Do not force the conversation into the energy qualification workflow unless the user asks about it. "
+                "Keep the tone concise, direct, and professional. "
                 "Reply in the user's language: {language}."
             )
             async for token in self._stream_with_prompt(
@@ -95,8 +98,9 @@ class LLMService:
 
         if reply_mode == ReplyMode.PRODUCT:
             prompt = (
-                "Reply like a concise product specialist for an energy lead qualification assistant. "
-                "Explain clearly what the product does, who it is for, and what kinds of information it can evaluate. "
+                "Reply like a concise product specialist for a business energy intake assistant. "
+                "Explain clearly that it is for commercial and industrial customers who want to share their energy account details so the team can review and follow up. "
+                "Describe the kinds of information it helps collect, such as business type, contract status, usage, supplier status, and facility details. "
                 "Keep the tone confident, customer-friendly, and easy to understand. "
                 "Reply in the user's language: {language}."
             )
@@ -113,7 +117,7 @@ class LLMService:
         if reply_mode == ReplyMode.CLARIFICATION:
             prompt = (
                 "Explain the business term the user is asking about in a concise way, "
-                "then guide them back to the current qualification question. "
+                "then guide them back to the current intake question. "
                 "Reply in the user's language: {language}."
             )
             redirect = state.next_question
@@ -130,7 +134,7 @@ class LLMService:
         if reply_mode == ReplyMode.REDIRECT:
             prompt = (
                 "Answer the user's off-topic question briefly in one sentence, "
-                "then redirect them back to the active energy lead qualification task. "
+                "then redirect them back to the active business energy intake task. "
                 "Reply in the user's language: {language}."
             )
             redirect = f"After that, {state.next_question}"
@@ -175,7 +179,7 @@ class LLMService:
 
         payload = {
             "language": self._language_instruction(state.detected_language),
-            "history": to_langchain_messages(history[-8:]),
+            "history": to_langchain_messages(history[-16:]),
             "goal": fallback_text,
         }
         config = langsmith_config(
@@ -208,6 +212,25 @@ class LLMService:
 
     def _language_instruction(self, language: str) -> str:
         return language_instruction(language)
+
+    def _state_summary(self, state: ConversationState) -> str:
+        profile = state.profile
+        profile_parts = [
+            f"business_segment={profile.business_segment.value if profile.business_segment else 'unknown'}",
+            f"annual_usage_mwh={profile.annual_usage_mwh}",
+            f"usage_estimated={profile.usage_estimated}",
+            f"square_footage={profile.square_footage}",
+            f"contract_status={profile.contract_status.value}",
+            f"contract_expiry_months={profile.contract_expiry_months}",
+            f"building_age_years={profile.building_age_years}",
+        ]
+        return (
+            f"mode={state.mode.value}; "
+            f"completed={state.completed}; "
+            f"next_question={state.next_question}; "
+            f"missing_fields={state.missing_fields}; "
+            f"profile=({', '.join(profile_parts)})"
+        )
 
 
 llm_service = LLMService()

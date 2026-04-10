@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     )
     estimated_mwh_per_sqft_commercial: float = 0.0016
     estimated_mwh_per_sqft_industrial: float = 0.0032
+    auth0_domain: str = ""
+    auth0_api_audience: str = ""
 
     @property
     def database_url(self) -> URL:
@@ -43,6 +45,18 @@ class Settings(BaseSettings):
             database=self.db_name,
         )
 
+    @property
+    def auth0_enabled(self) -> bool:
+        return bool(self.auth0_domain and self.auth0_api_audience)
+
+    @property
+    def auth0_issuer(self) -> str:
+        domain = self.auth0_domain.strip()
+        if not domain:
+            return ""
+        if not domain.startswith("http://") and not domain.startswith("https://"):
+            domain = f"https://{domain}"
+        return f"{domain.rstrip('/')}/"
+
 
 settings = Settings()
-

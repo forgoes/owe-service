@@ -19,6 +19,33 @@ from app.services.language import DEFAULT_LANGUAGE
 from app.services.profile_extractor import profile_extractor
 from app.services.qualification import estimate_usage_mwh, missing_fields, qualify_lead
 
+NO_PROVIDER_MARKERS = (
+    "\u6ca1\u6709\u4f9b\u5e94\u5546",
+    "\u6ca1\u6709\u80fd\u6e90\u4f9b\u5e94\u5546",
+    "\u76ee\u524d\u6ca1\u6709\u4f9b\u5e94\u5546",
+    "\u5f53\u524d\u6ca1\u6709\u4f9b\u5e94\u5546",
+)
+
+MONTH_TO_MONTH_MARKERS = (
+    "\u6309\u6708\u7eed\u7ea6",
+    "\u6708\u6708\u7eed\u7ea6",
+    "\u6708\u5ea6\u7eed\u7ea6",
+)
+
+FIXED_TERM_MARKERS = (
+    "\u56fa\u5b9a\u5408\u540c",
+    "\u56fa\u5b9a\u5408\u540c\u671f\u5185",
+    "\u56fa\u5b9a\u671f\u9650\u5408\u540c",
+    "\u56fa\u5b9a\u671f\u9650\u5185",
+)
+
+EXPIRING_MARKERS = (
+    "\u5feb\u5230\u671f",
+    "\u5373\u5c06\u5230\u671f",
+    "\u5feb\u7eed\u7ea6",
+    "\u5373\u5c06\u7eed\u7ea6",
+)
+
 
 def _extract_number(pattern: str, text: str) -> int | None:
     match = re.search(pattern, text, flags=re.IGNORECASE)
@@ -74,16 +101,29 @@ def merge_profile(
         or "do not have a current provider" in lowered
         or "don't have a current provider" in lowered
         or "dont have a current provider" in lowered
+        or any(marker in user_message for marker in NO_PROVIDER_MARKERS)
     ):
         profile.contract_status = ContractStatus.NO_CURRENT_PROVIDER
         profile.has_current_provider = False
-    elif "month-to-month" in lowered or "month to month" in lowered:
+    elif (
+        "month-to-month" in lowered
+        or "month to month" in lowered
+        or any(marker in user_message for marker in MONTH_TO_MONTH_MARKERS)
+    ):
         profile.contract_status = ContractStatus.MONTH_TO_MONTH
         profile.has_current_provider = True
-    elif "fixed" in lowered and "term" in lowered:
+    elif (
+        ("fixed" in lowered and "term" in lowered)
+        or any(marker in user_message for marker in FIXED_TERM_MARKERS)
+    ):
         profile.contract_status = ContractStatus.FIXED_TERM
         profile.has_current_provider = True
-    elif "expiring" in lowered or "expires" in lowered or "renewal" in lowered:
+    elif (
+        "expiring" in lowered
+        or "expires" in lowered
+        or "renewal" in lowered
+        or any(marker in user_message for marker in EXPIRING_MARKERS)
+    ):
         profile.contract_status = ContractStatus.EXPIRING
         profile.has_current_provider = True
 
@@ -126,11 +166,11 @@ def determine_next_question(
 ) -> str:
     if profile.contract_status == ContractStatus.NO_CURRENT_PROVIDER:
         if "business_segment" in fields:
-            return "Before I finalize it, is this lead commercial or industrial?"
-        return "Thanks. I have enough information to mark this as an instant-priority lead."
+            return "Before I finalize this intake, is this a commercial site or an industrial facility?"
+        return "Thanks. I have everything I need for now."
 
     if "business_segment" in fields:
-        return "Are you qualifying a commercial site or an industrial facility?"
+        return "Is this a commercial site or an industrial facility?"
     if "contract_status" in fields:
         return "What is your current contract situation: expiring soon, fixed term, month-to-month, or no current provider?"
     if "contract_expiry_months" in fields:
@@ -140,8 +180,8 @@ def determine_next_question(
     if "building_age_years" in fields:
         return "How old is the building or facility in years?"
     if profile.annual_usage_mwh is not None:
-        return "I have enough information to evaluate this lead. Want a concise qualification summary?"
-    return "Tell me a bit more about the site so I can complete the qualification matrix."
+        return "Thanks. I have enough information for our team to review your account."
+    return "Tell me a bit more about the site so I can complete this intake."
 
 
 def build_state_from_profile(
@@ -216,7 +256,7 @@ def build_clarification_message(
         "building_age_years" in current_state.missing_fields
         and "building_age_years" in previous_state.missing_fields
     ):
-        return "I still need the building age in years to finish qualification."
+        return "I still need the building age in years to continue."
 
     return None
 
@@ -232,18 +272,9 @@ def build_response_text(state: ConversationState) -> str:
             )
         return state.next_question
 
-    usage_label = (
-        f"{profile.annual_usage_mwh} MWh estimated from square footage"
-        if profile.usage_estimated
-        else f"{profile.annual_usage_mwh} MWh"
-    )
     return (
-        f"This lead is currently {state.qualification.tier.value.replace('_', ' ').upper()} "
-        f"and maps to a {state.qualification.bucket.value.upper()} bucket. "
-        f"Reason: {state.qualification.reasoning} "
-        f"Captured profile: segment={profile.business_segment.value if profile.business_segment else 'unknown'}, "
-        f"usage={usage_label}, contract={profile.contract_status.value}, "
-        f"expiry_months={profile.contract_expiry_months}, building_age={profile.building_age_years}."
+        "Thanks for sharing those details. I have enough information for our team to review this opportunity, "
+        "and someone will follow up with you shortly."
     )
 
 
