@@ -45,9 +45,16 @@ class Settings(BaseSettings):
             database=self.db_name,
         )
 
-    @property
-    def auth0_enabled(self) -> bool:
-        return bool(self.auth0_domain and self.auth0_api_audience)
+    def validate_auth0_config(self) -> None:
+        missing = []
+        if not self.auth0_domain:
+            missing.append("AUTH0_DOMAIN")
+        if not self.auth0_api_audience:
+            missing.append("AUTH0_API_AUDIENCE")
+        if missing:
+            raise RuntimeError(
+                f"Missing required Auth0 configuration: {', '.join(missing)}"
+            )
 
     @property
     def auth0_issuer(self) -> str:

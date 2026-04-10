@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info("Initializing runtime dependencies.")
+    settings.validate_auth0_config()
     initialize_runtime_dependencies()
     logger.info("Runtime dependencies initialized successfully.")
     yield

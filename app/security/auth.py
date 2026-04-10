@@ -32,8 +32,7 @@ def require_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict[str, Any] | None:
-    if not settings.auth0_enabled:
-        return None
+    settings.validate_auth0_config()
 
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
